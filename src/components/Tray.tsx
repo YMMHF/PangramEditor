@@ -1,20 +1,29 @@
-// src/components/Tray.tsx
 import React from 'react';
-import { TILE_SIZE, TRAY_GRID_ROWS } from '../constants';
+import { TRAY_GRID_ROWS } from '../constants';
 
-const Tray: React.FC = () => {
-  const screenH = window.innerHeight;
-  const gridRows = Math.floor(screenH / TILE_SIZE);
-  const trayTop = (gridRows - TRAY_GRID_ROWS) * TILE_SIZE;
+interface Props {
+  tileSize: number;
+  offsets: { trayLeftX: number; trayTopY: number };
+}
 
+const Tray: React.FC<Props> = ({ tileSize, offsets }) => {
   return (
-    <div
-      className="fixed bottom-0 w-full bg-slate-50 border-t border-slate-200 pointer-events-none"
-      style={{ top: trayTop }}
+    <div 
+      className="fixed inset-x-0 bottom-0 bg-slate-50/50 border-t border-slate-200 pointer-events-none"
+      style={{ top: offsets.trayTopY }}
     >
-      <div className="px-4 py-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest border-b border-slate-100">
-        ひらがなトレイ
-      </div>
+      {/* トレイ内のガイド線 */}
+      <div 
+        className="absolute inset-0"
+        style={{
+          backgroundImage: `
+            linear-gradient(to right, #e2e8f0 1px, transparent 1px),
+            linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)
+          `,
+          backgroundSize: `${tileSize}px ${tileSize}px`,
+          backgroundPosition: `${offsets.trayLeftX}px 0px`
+        }}
+      />
     </div>
   );
 };

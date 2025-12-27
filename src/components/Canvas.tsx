@@ -1,19 +1,23 @@
-// src/components/Canvas.tsx
 import React from 'react';
-import { TILE_SIZE } from '../constants';
 
-const Canvas: React.FC = () => {
+interface Props {
+  tileSize: number;
+}
+
+const Canvas: React.FC<Props> = ({ tileSize }) => {
+  const trayLeftX = Math.floor((window.innerWidth - 10 * tileSize) / 2);
+
   return (
     <div className="fixed inset-0 pointer-events-none">
-      <div
-        className="w-full h-full"
+      <div 
+        className="absolute inset-0"
         style={{
           backgroundImage: `
             linear-gradient(to right, #f1f5f9 1px, transparent 1px),
             linear-gradient(to bottom, #f1f5f9 1px, transparent 1px)
           `,
-          backgroundSize: `${TILE_SIZE}px ${TILE_SIZE}px`,
-          backgroundPosition: '0 0',
+          backgroundSize: `${tileSize}px ${tileSize}px`,
+          backgroundPosition: `${trayLeftX}px 0px`, // トレイのX位置に合わせる
         }}
       />
     </div>
