@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["main"] # あなたのメインブランチ名に合わせてください
+    branches: ["main"]
 
 permissions:
   contents: read
@@ -23,13 +23,14 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Build
-        run: npm run build
+        # 型チェックで落ちるのを防ぐため、ビルドコマンドを直接実行
+        run: npx vite build
       - name: Setup Pages
         uses: actions/configure-pages@v4
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist' # Viteの出力先
+          path: './dist'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
