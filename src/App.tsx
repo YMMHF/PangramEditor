@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { useMotionValue, animate } from 'framer-motion';
+import { useMotionValue, animate, motion } from 'framer-motion';
 import { HIRAGANA, TILE_SIZE, HIRAGANA_GRID, TRAY_GRID_ROWS, GROUP_COLORS } from './constants';
 import type { TileData } from './types';
 import Menu from './components/Menu';
@@ -7,7 +7,6 @@ import Canvas from './components/Canvas';
 import Tray from './components/Tray';
 import DraggableTile from './components/DraggableTile';
 import type { PanInfo } from 'framer-motion';
-import { motion } from 'framer-motion';
 
 interface EnhancedTileData extends TileData {
   version: number;
@@ -23,7 +22,6 @@ const App: React.FC = () => {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // 移動の基準となる唯一の MotionValue
   const dragX = useMotionValue(0);
   const dragY = useMotionValue(0);
 
@@ -31,7 +29,6 @@ const App: React.FC = () => {
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [activeDragInfo, setActiveDragInfo] = useState<{ snapDx: number; snapDy: number; isCollision: boolean } | null>(null);
 
-  // 初期配置・レスポンス対応
   const updateHomePositions = useCallback(() => {
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
@@ -55,7 +52,6 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', updateHomePositions);
   }, [updateHomePositions]);
 
-  // 衝突判定
   const checkCollision = (ids: string[], dx: number, dy: number, currentTiles: EnhancedTileData[]) => {
     for (const mid of ids) {
       const t = currentTiles.find(tile => tile.id === mid)!;
@@ -70,13 +66,11 @@ const App: React.FC = () => {
     return false;
   };
 
-  // グループ化・解除のアクション
   const handleGroupAction = () => {
     if (selectedIds.size === 0) return;
     setTiles(prev => {
       const selectedTiles = prev.filter(t => selectedIds.has(t.id));
       const groupsInSelection = new Set(selectedTiles.map(t => t.groupId).filter(Boolean));
-      
       if (groupsInSelection.size > 0) {
         return prev.map(t => groupsInSelection.has(t.groupId) ? { ...t, groupId: undefined, version: t.version + 1 } : t);
       } else {
@@ -98,7 +92,7 @@ const App: React.FC = () => {
     setActiveDragId(id);
   };
 
-  // 引数 id を使わないため _id に修正
+  // L123: 未使用引数 id を _id に変更
   const handleDrag = useCallback((_id: string, info: PanInfo) => {
     if (isSelectionMode) return;
     dragX.set(info.offset.x);
@@ -108,30 +102,27 @@ const App: React.FC = () => {
     setActiveDragInfo({ snapDx, snapDy, isCollision: checkCollision(movingIds, snapDx, snapDy, tiles) });
   }, [movingIds, tiles, dragX, dragY, isSelectionMode]);
 
-  // 引数 id を使わないため _id に修正
+  // L138: 未使用引数 id を _id に変更
   const handleDragEnd = (_id: string, info: PanInfo) => {
     if (isSelectionMode) return;
     const snapDx = Math.round(info.offset.x / TILE_SIZE) * TILE_SIZE;
     const snapDy = Math.round(info.offset.y / TILE_SIZE) * TILE_SIZE;
     const isCollision = checkCollision(movingIds, snapDx, snapDy, tiles);
-    
-    // アニメーション目標位置の数値（型を明示）
     const targetX: number = isCollision ? 0 : snapDx;
     const targetY: number = isCollision ? 0 : snapDy;
 
-    // animate の設定（Overload エラー対策で any を指定）
+    // 型定義のエラーを避けるため config に any を適用
     const config: any = { type: "spring", stiffness: 1000, damping: 50, mass: 0.2 };
     setActiveDragId(null);
     setActiveDragInfo(null);
 
-    // 吸着アニメーション実行
+    // L154-155: animate の呼び出し
     const animX = animate(dragX, targetX, config);
     const animY = animate(dragY, targetY, config);
 
     Promise.all([animX, animY]).then(() => {
       const screenH = window.innerHeight;
       const trayTopY = (Math.floor(screenH / TILE_SIZE) - TRAY_GRID_ROWS) * TILE_SIZE;
-      
       setTiles(prev => prev.map(t => {
         if (movingIds.includes(t.id)) {
           const nx = t.x + targetX;
@@ -140,9 +131,7 @@ const App: React.FC = () => {
         }
         return t;
       }));
-      
-      dragX.set(0);
-      dragY.set(0);
+      dragX.set(0); dragY.set(0);
       setMovingIds([]);
     });
   };
@@ -179,7 +168,6 @@ const App: React.FC = () => {
       <Canvas /><Tray />
 
       <div className="fixed inset-0 pointer-events-none z-50">
-        {/* グループ枠 */}
         {Object.entries(groupBoundaries).map(([gid, b]) => {
           const isMoving = movingIds.some(id => tiles.find(t => t.id === id)?.groupId === gid);
           const color = GROUP_COLORS[b.colorIndex];
@@ -190,7 +178,6 @@ const App: React.FC = () => {
           );
         })}
 
-        {/* スナップ影 */}
         {activeDragId && activeDragInfo && (
           <div className="absolute pointer-events-none">
             {movingIds.map(mid => {
@@ -204,7 +191,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* タイル実体 */}
         {tiles.map((tile) => (
           <div key={tile.id} className="pointer-events-auto" style={{ opacity: tile.initialized ? 1 : 0 }}>
             <DraggableTile 
