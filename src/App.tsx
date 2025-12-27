@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useMotionValue, animate, motion, AnimatePresence } from 'framer-motion';
 import { 
   RotateCcw, 
@@ -10,8 +10,7 @@ import {
   Group, 
   Ungroup, 
   Plus,
-  Download,
-  Upload
+  Edit2
 } from 'lucide-react';
 import type { PanInfo, MotionValue } from 'framer-motion';
 
@@ -29,9 +28,10 @@ const HIRAGANA_GRID = [
   ["ら", "り", "る", "れ", "ろ"],
   ["わ", "", "を", "", "ん"]
 ];
-// Transpose to 10 columns x 5 rows
+
+// 右にあ行、左にわ行が来るように転置 (10列 x 5行)
 const TRANSPOSED_GRID: string[][] = Array.from({ length: 5 }, (_, r) => 
-  Array.from({ length: 10 }, (_, c) => HIRAGANA_GRID[c][r] || "")
+  Array.from({ length: 10 }, (_, c) => HIRAGANA_GRID[9 - c][r] || "")
 );
 
 const TRAY_GRID_ROWS = 5;
@@ -85,6 +85,9 @@ const DraggableTile: React.FC<{
 }) => {
   const [isDragging, setIsDragging] = useState(false);
 
+  // 座標が数値でない（NaN）場合はレンダリングしない
+  if (isNaN(tile.x) || isNaN(tile.y) || isNaN(tileSize)) return null;
+
   return (
     <motion.div
       drag={!disabled}
@@ -96,7 +99,9 @@ const DraggableTile: React.FC<{
       onTap={(e) => { e.stopPropagation(); onClick(); }}
       style={{
         width: tileSize, height: tileSize,
-        position: 'fixed', left: tile.x, top: tile.y,
+        position: 'fixed', 
+        left: tile.x || 0, 
+        top: tile.y || 0,
         x: isMoving ? dragX : 0,
         y: isMoving ? dragY : 0,
         backgroundColor: isSelected ? undefined : (groupColor?.bg || "white"),
@@ -127,13 +132,14 @@ const Menu: React.FC<{
   savedLayouts: SavedLayout[];
   onLoadLayout: (id: string) => void;
   onDeleteLayout: (id: string) => void;
+  onRenameLayout: (id: string) => void;
   isSelectionMode: boolean;
   onToggleSelectionMode: () => void;
   selectedCount: number;
   onGroupAction: () => void;
   hasGroupInSelection: boolean;
 }> = ({ 
-  onReset, onSaveNew, onOverwrite, currentLayoutName, savedLayouts, onLoadLayout, onDeleteLayout,
+  onReset, onSaveNew, onOverwrite, currentLayoutName, savedLayouts, onLoadLayout, onDeleteLayout, onRenameLayout,
   isSelectionMode, onToggleSelectionMode, selectedCount, onGroupAction, hasGroupInSelection
 }) => {
   const [isListOpen, setIsListOpen] = useState(false);
@@ -190,7 +196,14 @@ const Menu: React.FC<{
                         <p className="font-bold text-sm text-slate-700 truncate">{layout.name}</p>
                         <p className="text-[10px] text-slate-400">{new Date(layout.timestamp).toLocaleString()}</p>
                       </div>
-                      <button onClick={() => onDeleteLayout(layout.id)} className="p-2 text-slate-300 hover:text-red-500"><Trash2 size={16} /></button>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => onRenameLayout(layout.id)} className="p-2 text-slate-400 hover:text-blue-500 transition-colors" title="名前を変更">
+                          <Edit2 size={16} />
+                        </button>
+                        <button onClick={() => onDeleteLayout(layout.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors" title="削除">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </div>
                   ))
                 }
@@ -204,6 +217,8 @@ const Menu: React.FC<{
 };
 
 const Canvas: React.FC<{ tileSize: number }> = ({ tileSize }) => {
+  // NaN 防止
+  if (isNaN(tileSize) || tileSize <= 0) return null;
   const trayLeftX = Math.floor((window.innerWidth - 10 * tileSize) / 2);
   return (
     <div className="fixed inset-0 pointer-events-none">
@@ -223,6 +238,8 @@ const Canvas: React.FC<{ tileSize: number }> = ({ tileSize }) => {
 };
 
 const Tray: React.FC<{ tileSize: number, offsets: { trayLeftX: number; trayTopY: number } }> = ({ tileSize, offsets }) => {
+  // NaN 防止
+  if (isNaN(tileSize) || tileSize <= 0 || isNaN(offsets.trayTopY)) return null;
   return (
     <div 
       className="fixed inset-x-0 bottom-0 bg-slate-50/50 border-t border-slate-200 pointer-events-none"
@@ -268,7 +285,8 @@ export default function App() {
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
     
-    const newTileSize = Math.min(60, Math.floor(screenW / 12));
+    // 最小サイズを 1px にして NaN (0除算) を防ぐ
+    const newTileSize = Math.max(1, Math.min(60, Math.floor(screenW / 12)));
     setTileSize(newTileSize);
 
     const trayLeftX = Math.floor((screenW - 10 * newTileSize) / 2);
@@ -296,6 +314,34 @@ export default function App() {
         };
       });
     });
+  }, []);
+
+  // 配置をリセットする関数
+  const handleReset = useCallback(() => {
+    if (!confirm("配置をすべてリセットしますか？")) return;
+    
+    const screenW = window.innerWidth;
+    const screenH = window.innerHeight;
+    const newTileSize = Math.max(1, Math.min(60, Math.floor(screenW / 12)));
+    const trayLeftX = Math.floor((screenW - 10 * newTileSize) / 2);
+    const trayTopY = (Math.floor(screenH / newTileSize) - TRAY_GRID_ROWS) * newTileSize;
+
+    setTiles(prev => prev.map(t => {
+      let r = 0, c = 0;
+      TRANSPOSED_GRID.forEach((row, ri) => {
+        const ci = row.indexOf(t.char);
+        if (ci !== -1) { r = ri; c = ci; }
+      });
+      return {
+        ...t,
+        isPlaced: false,
+        groupId: undefined,
+        x: trayLeftX + c * newTileSize,
+        y: trayTopY + r * newTileSize,
+        version: t.version + 1
+      };
+    }));
+    setCurrentLayoutId(null);
   }, []);
 
   useEffect(() => {
@@ -354,6 +400,19 @@ export default function App() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newList));
     if (currentLayoutId === id) setCurrentLayoutId(null);
   };
+
+  const renameLayout = useCallback((id: string) => {
+    const layout = savedLayouts.find(l => l.id === id);
+    if (!layout) return;
+    const newName = prompt("新しいレイアウト名を入力してください", layout.name);
+    if (!newName || newName === layout.name) return;
+
+    const newList = savedLayouts.map(l => 
+      l.id === id ? { ...l, name: newName } : l
+    );
+    setSavedLayouts(newList);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newList));
+  }, [savedLayouts]);
 
   // Collision Detection
   const checkCollision = (ids: string[], dx: number, dy: number, currentTiles: TileData[]) => {
@@ -440,13 +499,14 @@ export default function App() {
     <div className="fixed inset-0 bg-white overflow-hidden touch-none selection:bg-none">
       <div className="relative z-[100]">
         <Menu 
-          onReset={() => confirm("配置をリセットしますか？") && updateLayout()} 
+          onReset={handleReset} 
           onSaveNew={saveNew}
           onOverwrite={overwrite}
           currentLayoutName={savedLayouts.find(l => l.id === currentLayoutId)?.name}
           savedLayouts={savedLayouts}
           onLoadLayout={loadLayout}
           onDeleteLayout={deleteLayout}
+          onRenameLayout={renameLayout}
           isSelectionMode={isSelectionMode} 
           onToggleSelectionMode={() => { setIsSelectionMode(!isSelectionMode); setSelectedIds(new Set()); }} 
           selectedCount={selectedIds.size} 
@@ -473,6 +533,7 @@ export default function App() {
       {/* Group Boundaries (Background) */}
       <div className="fixed inset-0 pointer-events-none z-10">
         {Object.entries(groupBoundaries).map(([gid, b]) => {
+          if (isNaN(b.minX) || isNaN(b.minY)) return null;
           const isMoving = movingIds.some(id => tiles.find(t => t.id === id)?.groupId === gid);
           return (
             <motion.div key={`boundary-${gid}`} className="absolute border-2 rounded-lg"
@@ -492,6 +553,7 @@ export default function App() {
           <div className="absolute">
             {movingIds.map(mid => {
               const t = tiles.find(tile => tile.id === mid)!;
+              if (isNaN(t.x) || isNaN(t.y)) return null;
               return <div key={`ghost-${mid}`} className={`absolute border-2 border-dashed rounded ${activeDragInfo.isCollision ? 'bg-red-200/40 border-red-400' : 'bg-slate-200/50 border-slate-300'}`} style={{ width: tileSize, height: tileSize, left: t.x + activeDragInfo.snapDx, top: t.y + activeDragInfo.snapDy }} />;
             })}
           </div>
